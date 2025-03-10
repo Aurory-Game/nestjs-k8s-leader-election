@@ -8,14 +8,14 @@ export class LeaderElectionService implements OnApplicationBootstrap {
   private readonly logger = new Logger(LeaderElectionService.name);
   private kubeClient: CoordinationV1Api;
   private watch: Watch;
-  private leaseName: string;
-  private namespace: string;
-  private renewalInterval: number;
-  private durationInSeconds: number;
+  private readonly leaseName: string;
+  private readonly namespace: string;
+  private readonly renewalInterval: number;
+  private readonly durationInSeconds: number;
   private isLeader = false;
-  private logAtLevel: 'log' | 'debug';
+  private readonly logAtLevel: 'log' | 'debug';
   private leaseRenewalTimeout: NodeJS.Timeout | null = null;
-  private awaitLeadership: boolean;
+  private readonly awaitLeadership: boolean;
   LEADER_IDENTITY = `nestjs-${process.env.HOSTNAME}`;
 
   constructor(
@@ -109,12 +109,10 @@ export class LeaderElectionService implements OnApplicationBootstrap {
     lease.spec.acquireTime = new V1MicroTime(new Date());
     lease.spec.renewTime = new V1MicroTime(new Date());
 
+    const params = { name: this.leaseName, namespace: this.namespace, body: lease };
+
     try {
-      const { body } = await this.kubeClient.replaceNamespacedLease(
-        this.leaseName,
-        this.namespace,
-        lease,
-      );
+      const body = await this.kubeClient.replaceNamespacedLease(params);
       this.logger[this.logAtLevel]('Successfully acquired lease');
       return body;
     } catch (error) {
@@ -129,18 +127,10 @@ export class LeaderElectionService implements OnApplicationBootstrap {
       if (this.isLeaseHeldByUs(lease)) {
         this.logger[this.logAtLevel]('Renewing lease...');
         lease.spec.renewTime = new V1MicroTime(new Date());
-        try {
-          const { body } = await this.kubeClient.replaceNamespacedLease(
-            this.leaseName,
-            this.namespace,
-            lease,
-          );
-          this.logger[this.logAtLevel]('Successfully renewed lease');
-          return body;
-        } catch (error) {
-          this.logger.error({ message: 'Error while renewing lease', error });
-          throw error;
-        }
+        const params = { name: this.leaseName, namespace: this.namespace, body: lease };
+        const body = await this.kubeClient.replaceNamespacedLease(params);
+        this.logger[this.logAtLevel]('Successfully renewed lease');
+        return body;
       } else {
         this.loseLeadership();
       }
@@ -151,12 +141,9 @@ export class LeaderElectionService implements OnApplicationBootstrap {
   }
 
   private async getLease(): Promise<V1Lease> {
+    const params = { name: this.leaseName, namespace: this.namespace };
     try {
-      const { body } = await this.kubeClient.readNamespacedLease(
-        this.leaseName,
-        this.namespace,
-      );
-      return body;
+      return await this.kubeClient.readNamespacedLease(params);
     } catch (error) {
       if (error.response && error.response.statusCode === 404) {
         this.logger[this.logAtLevel]('Lease not found. Creating lease...');
@@ -181,11 +168,10 @@ export class LeaderElectionService implements OnApplicationBootstrap {
       },
     };
 
+    const params = { namespace: this.namespace, body: lease };
+
     try {
-      const { body } = await this.kubeClient.createNamespacedLease(
-        this.namespace,
-        lease,
-      );
+      const body = await this.kubeClient.createNamespacedLease(params);
       this.logger[this.logAtLevel]('Successfully created lease');
       return body;
     } catch (error) {
@@ -220,11 +206,8 @@ export class LeaderElectionService implements OnApplicationBootstrap {
       if (lease && this.isLeaseHeldByUs(lease)) {
         lease.spec.holderIdentity = null;
         lease.spec.renewTime = null;
-        await this.kubeClient.replaceNamespacedLease(
-          this.leaseName,
-          this.namespace,
-          lease,
-        );
+        const params = { name: this.leaseName, namespace: this.namespace, body: lease };
+        await this.kubeClient.replaceNamespacedLease(params);
         this.logger[this.logAtLevel](`Lease for ${this.leaseName} released.`);
       }
     } catch (error) {
