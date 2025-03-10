@@ -311,6 +311,7 @@ export class LeaderElectionService implements OnApplicationBootstrap {
   }
 
   private handleLeaseUpdate(leaseObj: V1Lease) {
+    this.logger.debug({ message: 'Detecting lease update', leaseObj });
     if (this.isLeaseHeldByUs(leaseObj)) {
       if (!this.isLeader) {
         setTimeout(() => {
